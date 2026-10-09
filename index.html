@@ -26,6 +26,12 @@
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
   .chips li { background: rgba(237,196,79,.1); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; font-size: 14px; }
   .chips b { color: var(--accent); font-weight: 600; }
+  .tech { margin: 0 0 18px; padding: 10px 14px; background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 10px; }
+  .tech label.check { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+  .tech input[type=checkbox] { margin-top: 5px; accent-color: var(--accent); }
+  .tech details { margin-top: 6px; }
+  .tech dl { display: grid; grid-template-columns: max-content 1fr; gap: 3px 16px; margin: 8px 0 2px; font-size: 14px; }
+  .tech dt { color: var(--muted); } .tech dd { margin: 0; word-break: break-word; }
   label.title { display: block; margin: 0 0 6px; font-weight: 600; }
   .hint { color: var(--muted); font-size: 14px; font-weight: 400; }
   textarea, input[type=text], input[type=email] {
@@ -73,6 +79,12 @@
   <section class="card" id="formCard">
     <ul class="chips" id="chips" aria-label="Angaben aus dem Spiel"></ul>
 
+    <div class="tech" id="techBox" hidden>
+      <label class="check"><input type="checkbox" id="techOn" checked>
+        <span>Technische Daten aus dem Spiel mitsenden <span class="hint">(Betriebssystem, Grafikkarte, Spielstand …)</span></span></label>
+      <details><summary>Was genau wird gesendet?</summary><dl id="techList"></dl></details>
+    </div>
+
     <form id="form" novalidate autocomplete="off">
       <label class="title" for="message">Was ist passiert? <span class="hint">(erforderlich)</span></label>
       <textarea id="message" maxlength="4000" placeholder="Beschreibe kurz, was du gemacht hast, was du erwartet hast und was stattdessen passiert ist …"></textarea>
@@ -108,6 +120,7 @@
       <ul>
         <li>Dein Text, die Screenshots und – wenn du sie ausfüllst – Name und E-Mail.</li>
         <li>Aus dem Spiel: Lobby-ID, Spielversion und Szene (oben als Schilder zu sehen).</li>
+        <li>Wenn du das Häkchen oben lässt: technische Daten wie Betriebssystem, Prozessor, Grafikkarte, Arbeitsspeicher, Unity-Version, Sprache, Bildschirmgröße sowie Game, Runde und deine Rolle – alles steht in der Liste dort. <b>Nicht</b> dabei: Rechnername, Benutzername, IP-Adresse, Chat.</li>
         <li>Sonst nichts: keine Cookies, kein Tracking, keine Daten von dieser Seite an Dritte. Der Entwurf bleibt nur in deinem Browser.</li>
         <li>Das Ticket landet bei den Entwicklern in Sentry (Rechenzentrum in Frankfurt).</li>
       </ul>
@@ -152,6 +165,52 @@
       li.append(b, document.createTextNode(value));
       chips.append(li);
     }
+  })();
+
+  // ---------- Technische Daten aus dem Spiel (im Link hinter dem "#", nie auf dem Server) ----------
+  const TECH_TEXT = ['os', 'osFamily', 'cpu', 'gpu', 'gpuApi', 'gpuVersion', 'model', 'unity', 'mode', 'backend', 'language', 'culture', 'timezone', 'quality', 'role'];
+  const TECH_NUM = ['cores', 'ramMb', 'vramMb', 'width', 'height', 'fullscreen', 'game', 'round', 'uptime', 'heapMb'];
+
+  function readTech() {
+    const match = /(?:^#|&)d=([A-Za-z0-9_-]+)/.exec(location.hash);
+    if (!match) return null;
+    try {
+      const b64 = match[1].replace(/-/g, '+').replace(/_/g, '/');
+      const bytes = Uint8Array.from(atob(b64 + '='.repeat((4 - b64.length % 4) % 4)), c => c.charCodeAt(0));
+      const raw = JSON.parse(new TextDecoder().decode(bytes));
+      const tech = {};
+      // Nur bekannte Felder, nur Text/Zahlen, begrenzt: Was sonst im Link steht, wird nicht beachtet.
+      for (const key of TECH_TEXT) if (typeof raw[key] === 'string') { const v = raw[key].replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120); if (v) tech[key] = v; }
+      for (const key of TECH_NUM) if (Number.isFinite(raw[key]) && raw[key] > 0) tech[key] = Math.min(Math.round(raw[key]), 10000000);
+      return Object.keys(tech).length ? tech : null;
+    } catch (_) { return null; }
+  }
+
+  const tech = readTech();
+
+  function gib(mb) { return (mb / 1024).toFixed(1).replace('.', ',') + ' GB'; }
+  function techRows(t) {
+    const rows = [
+      ['Betriebssystem', t.os], ['Prozessor', t.cpu && (t.cpu + (t.cores ? ' (' + t.cores + ' Threads)' : ''))],
+      ['Arbeitsspeicher', t.ramMb && gib(t.ramMb)], ['Grafikkarte', t.gpu && (t.gpu + (t.vramMb ? ', ' + gib(t.vramMb) : ''))],
+      ['Grafik-Schnittstelle', t.gpuApi], ['Gerät', t.model], ['Unity', t.unity && (t.unity + (t.mode ? ' · ' + t.mode : ''))],
+      ['Sprache', t.language && (t.language + (t.culture ? ' (' + t.culture + ')' : ''))], ['Zeitzone', t.timezone],
+      ['Bildschirm', t.width && t.height && (t.width + ' × ' + t.height + (t.fullscreen ? ' (Vollbild)' : ' (Fenster)') + (t.quality ? ' · ' + t.quality : ''))],
+      ['Spiel läuft seit', t.uptime && (Math.floor(t.uptime / 60) + ' min')],
+      ['Game / Runde', t.game && (t.game + (t.round ? ' / ' + t.round : ''))], ['Deine Rolle', t.role]
+    ];
+    return rows.filter(r => r[1]);
+  }
+
+  (function renderTech() {
+    if (!tech) return;
+    const list = $('techList');
+    for (const [label, value] of techRows(tech)) {
+      const dt = document.createElement('dt'); dt.textContent = label;
+      const dd = document.createElement('dd'); dd.textContent = value;
+      list.append(dt, dd);
+    }
+    $('techBox').hidden = false;
   })();
 
   // ---------- Entwurf ----------
@@ -225,6 +284,24 @@
   });
 
   // ---------- Senden: ein Sentry-"Envelope" (Feedback + Bilder) direkt aus dem Browser ----------
+  // Die technischen Daten als Sentry-Karten (Gerät, Betriebssystem, Grafikkarte, ...) - dieselben, die früher das SDK im Spiel lieferte.
+  function techContexts(t) {
+    const MB = 1024 * 1024;
+    const clean = o => { for (const k of Object.keys(o)) if (o[k] === undefined || o[k] === '') delete o[k]; return o; };
+    return {
+      device: clean({ type: 'device', device_type: 'Desktop', model: t.model, cpu_description: t.cpu, processor_count: t.cores,
+        memory_size: t.ramMb && t.ramMb * MB, timezone: t.timezone }),
+      os: clean({ type: 'os', name: t.osFamily, raw_description: t.os }),
+      gpu: clean({ type: 'gpu', name: t.gpu, memory_size: t.vramMb, api_type: t.gpuApi, version: t.gpuVersion }),
+      runtime: clean({ type: 'runtime', name: t.backend }),
+      unity: clean({ type: 'unity', editor_version: t.unity, install_mode: t.mode, active_scene_name: context.scene }),
+      app: clean({ type: 'app', app_name: 'ALIBI', app_version: context.version, app_memory: t.heapMb && t.heapMb * MB }),
+      culture: clean({ name: t.culture, display_name: t.language }),
+      spiel: clean({ lobby: context.lobby, game: t.game, round: t.round, role: t.role, screen: t.width && t.height && (t.width + 'x' + t.height),
+        fullscreen: t.fullscreen === undefined ? undefined : !!t.fullscreen, quality: t.quality, uptime_s: t.uptime })
+    };
+  }
+
   function buildEnvelope(eventId) {
     const text = message.value.trim().slice(0, LIMITS.message);
     const feedback = { message: text, source: 'ticket-page', url: location.origin + location.pathname };
@@ -235,9 +312,17 @@
     if (context.lobby) tags.lobby = context.lobby;
     if (context.scene) tags.scene = context.scene;
 
+    const contexts = { feedback };
+    if (tech && $('techOn').checked) {
+      Object.assign(contexts, techContexts(tech));
+      if (tech.role) tags.role = tech.role;
+      if (tech.game) tags.game = String(tech.game);
+      if (tech.round) tags.round = String(tech.round);
+    }
+
     const event = {
       event_id: eventId, timestamp: Math.floor(Date.now() / 1000), platform: 'javascript', level: 'info', environment: 'web',
-      contexts: { feedback }, tags
+      contexts, tags
     };
     if (context.version) event.release = 'ALIBI@' + context.version;
 
