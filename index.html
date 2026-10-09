@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<!-- Die Seite darf nur mit Sentry reden und nichts von Dritten nachladen. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src blob: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://o4512224993214464.ingest.de.sentry.io; base-uri 'none'; form-action 'none'">
+<title>ALIBI – Ticket</title>
+<style>
+  :root {
+    --bg: #0c0d11; --panel: #14151b; --field: #1b1c24; --line: rgba(237,196,79,.28);
+    --accent: #edc44f; --text: #f0f0f4; --muted: #9fa1ad; --danger: #e05c5c; --ok: #6bd485;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--text); background: radial-gradient(1200px 600px at 50% -10%, #1d1a12 0%, var(--bg) 60%);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 920px; margin: 0 auto; padding: 28px 20px 56px; }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: .28em; text-transform: uppercase; color: var(--accent); }
+  header p { margin: 6px 0 0; color: var(--muted); }
+  .card { margin-top: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+  .chips li { background: rgba(237,196,79,.1); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; font-size: 14px; }
+  .chips b { color: var(--accent); font-weight: 600; }
+  label.title { display: block; margin: 0 0 6px; font-weight: 600; }
+  .hint { color: var(--muted); font-size: 14px; font-weight: 400; }
+  textarea, input[type=text], input[type=email] {
+    width: 100%; background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font: inherit;
+  }
+  textarea { min-height: 42vh; resize: vertical; }
+  textarea:focus, input:focus, button:focus-visible, .drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+  .count { text-align: right; color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .drop { margin-top: 16px; border: 2px dashed var(--line); border-radius: 12px; padding: 16px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: rgba(237,196,79,.07); color: var(--text); }
+  .shots { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+  .shot { position: relative; width: 200px; }
+  .shot img { display: block; width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #000; }
+  .shot button {
+    position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%; border: 0; cursor: pointer;
+    background: rgba(0,0,0,.75); color: #fff; font-size: 16px; line-height: 1;
+  }
+  .shot button:hover { background: var(--danger); }
+  .actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 22px; }
+  .send { background: var(--accent); color: #17140a; border: 0; border-radius: 10px; padding: 12px 28px; font: inherit; font-weight: 700; letter-spacing: .08em; cursor: pointer; }
+  .send:disabled { opacity: .5; cursor: default; }
+  .secondary { background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 20px; font: inherit; cursor: pointer; }
+  #status { min-height: 1.5em; }
+  #status.err { color: var(--danger); } #status.ok { color: var(--ok); } #status.busy { color: var(--muted); }
+  details { margin-top: 20px; color: var(--muted); font-size: 14px; }
+  details summary { cursor: pointer; color: var(--text); }
+  details ul { margin: 8px 0 0; padding-left: 20px; }
+  .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  #done { display: none; text-align: center; padding: 24px 8px; }
+  #done h2 { margin: 0 0 6px; color: var(--ok); }
+  #done code { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>ALIBI · Ticket</h1>
+    <p>Fehler gefunden oder einen Wunsch? Schreib es hier auf – das Spiel läuft währenddessen weiter.</p>
+  </header>
+
+  <noscript><div class="card">Diese Seite braucht JavaScript, um das Ticket zu senden.</div></noscript>
+
+  <section class="card" id="formCard">
+    <ul class="chips" id="chips" aria-label="Angaben aus dem Spiel"></ul>
+
+    <form id="form" novalidate autocomplete="off">
+      <label class="title" for="message">Was ist passiert? <span class="hint">(erforderlich)</span></label>
+      <textarea id="message" maxlength="4000" placeholder="Beschreibe kurz, was du gemacht hast, was du erwartet hast und was stattdessen passiert ist …"></textarea>
+      <div class="count"><span id="count">0</span> / 4000</div>
+
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Screenshots hinzufügen">
+        Screenshots hierher ziehen, mit <b>Strg+V</b> einfügen oder <u>auswählen</u> <span class="hint">(bis zu 3 Bilder)</span>
+      </div>
+      <input type="file" id="file" accept="image/*" multiple hidden>
+      <div class="shots" id="shots"></div>
+
+      <div class="row">
+        <div>
+          <label class="title" for="name">Name <span class="hint">(freiwillig)</span></label>
+          <input type="text" id="name" maxlength="80" placeholder="Wie sollen wir dich nennen?">
+        </div>
+        <div>
+          <label class="title" for="email">E-Mail <span class="hint">(freiwillig, für Rückfragen)</span></label>
+          <input type="email" id="email" maxlength="120" placeholder="du@beispiel.de">
+        </div>
+      </div>
+
+      <div class="trap" aria-hidden="true"><label>Nicht ausfüllen <input type="text" id="website" tabindex="-1" autocomplete="off"></label></div>
+
+      <div class="actions">
+        <button type="submit" class="send" id="send">SENDEN</button>
+        <span id="status" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+
+    <details>
+      <summary>Was wird gesendet?</summary>
+      <ul>
+        <li>Dein Text, die Screenshots und – wenn du sie ausfüllst – Name und E-Mail.</li>
+        <li>Aus dem Spiel: Lobby-ID, Spielversion und Szene (oben als Schilder zu sehen).</li>
+        <li>Sonst nichts: keine Cookies, kein Tracking, keine Daten von dieser Seite an Dritte. Der Entwurf bleibt nur in deinem Browser.</li>
+        <li>Das Ticket landet bei den Entwicklern in Sentry (Rechenzentrum in Frankfurt).</li>
+      </ul>
+    </details>
+  </section>
+
+  <section class="card" id="done" aria-live="polite">
+    <h2>Danke! Dein Ticket ist angekommen.</h2>
+    <p>Ticket-Nr. <code id="ticketNo"></code></p>
+    <button type="button" class="secondary" id="again">Noch ein Ticket schreiben</button>
+  </section>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  // Ziel: das Sentry-Projekt. Die DSN ist öffentlich - sie darf nur einsenden, nichts lesen.
+  const SENTRY = { host: 'o4512224993214464.ingest.de.sentry.io', project: '4512225005666384', key: '71973496978de69344c607ff6360b612' };
+  const LIMITS = { message: 4000, files: 3, imageWidth: 1920, cooldownMs: 20000, timeoutMs: 30000 };
+  const DRAFT_KEY = 'alibi-ticket-draft';
+  const SENT_KEY = 'alibi-ticket-last-sent';
+
+  const $ = id => document.getElementById(id);
+  const message = $('message'), nameInput = $('name'), emailInput = $('email'), status = $('status');
+  let shots = [];            // { blob, url }
+  let busy = false;
+  let lastSentAt = 0;
+
+  // ---------- Angaben aus dem Spiel (nur harmlose Zeichen, sonst werden sie ignoriert) ----------
+  const params = new URLSearchParams(location.search);
+  const safe = value => /^[A-Za-z0-9_.:\-]{1,64}$/.test(value || '') ? value : '';
+  const context = { lobby: safe(params.get('lobby')), version: safe(params.get('v')), scene: safe(params.get('scene')) };
+
+  (function renderChips() {
+    const chips = $('chips');
+    const items = [['Lobby', context.lobby], ['Version', context.version], ['Szene', context.scene]].filter(i => i[1]);
+    if (!items.length) { chips.remove(); return; }
+    for (const [label, value] of items) {
+      const li = document.createElement('li');
+      const b = document.createElement('b'); b.textContent = label + ' ';
+      li.append(b, document.createTextNode(value));
+      chips.append(li);
+    }
+  })();
+
+  // ---------- Entwurf ----------
+  function saveDraft() {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ m: message.value, n: nameInput.value, e: emailInput.value })); } catch (_) {}
+  }
+  function loadDraft() {
+    try {
+      const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+      if (!draft) return;
+      message.value = draft.m || ''; nameInput.value = draft.n || ''; emailInput.value = draft.e || '';
+      if (draft.m) setStatus('Dein Entwurf wurde wiederhergestellt.', 'busy');
+    } catch (_) {}
+  }
+  function clearDraft() { try { localStorage.removeItem(DRAFT_KEY); } catch (_) {} }
+
+  function setStatus(text, kind) { status.textContent = text; status.className = kind || ''; }
+  function updateCount() { $('count').textContent = message.value.length; }
+
+  message.addEventListener('input', () => { updateCount(); saveDraft(); });
+  nameInput.addEventListener('input', saveDraft);
+  emailInput.addEventListener('input', saveDraft);
+
+  // ---------- Screenshots: auswählen, ziehen, einfügen; auf max. 1920 px verkleinert ----------
+  async function shrink(file) {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, LIMITS.imageWidth / bitmap.width);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close && bitmap.close();
+    return new Promise((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob')), 'image/jpeg', 0.85));
+  }
+
+  async function addFiles(fileList) {
+    const images = Array.from(fileList || []).filter(f => f.type && f.type.startsWith('image/'));
+    for (const file of images) {
+      if (shots.length >= LIMITS.files) { setStatus('Mehr als ' + LIMITS.files + ' Bilder gehen nicht.', 'err'); break; }
+      try {
+        const blob = await shrink(file);
+        shots.push({ blob, url: URL.createObjectURL(blob) });
+      } catch (_) { setStatus('Das Bild „' + (file.name || 'Einfügung') + '“ konnte nicht gelesen werden.', 'err'); }
+    }
+    renderShots();
+  }
+
+  function renderShots() {
+    const box = $('shots');
+    box.replaceChildren();
+    shots.forEach((shot, index) => {
+      const wrap = document.createElement('div'); wrap.className = 'shot';
+      const img = document.createElement('img'); img.src = shot.url; img.alt = 'Screenshot ' + (index + 1);
+      const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = 'Entfernen';
+      remove.addEventListener('click', () => { URL.revokeObjectURL(shot.url); shots.splice(index, 1); renderShots(); });
+      wrap.append(img, remove);
+      box.append(wrap);
+    });
+  }
+
+  const drop = $('drop'), fileInput = $('file');
+  drop.addEventListener('click', () => fileInput.click());
+  drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+  document.addEventListener('paste', e => {
+    const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
+    if (files.some(f => f.type.startsWith('image/'))) { e.preventDefault(); addFiles(files); }
+  });
+
+  // ---------- Senden: ein Sentry-"Envelope" (Feedback + Bilder) direkt aus dem Browser ----------
+  function buildEnvelope(eventId) {
+    const text = message.value.trim().slice(0, LIMITS.message);
+    const feedback = { message: text, source: 'ticket-page', url: location.origin + location.pathname };
+    if (nameInput.value.trim()) feedback.name = nameInput.value.trim();
+    if (emailInput.value.trim()) feedback.contact_email = emailInput.value.trim();
+
+    const tags = { source: 'web', screenshots: String(shots.length) };
+    if (context.lobby) tags.lobby = context.lobby;
+    if (context.scene) tags.scene = context.scene;
+
+    const event = {
+      event_id: eventId, timestamp: Math.floor(Date.now() / 1000), platform: 'javascript', level: 'info', environment: 'web',
+      contexts: { feedback }, tags
+    };
+    if (context.version) event.release = 'ALIBI@' + context.version;
+
+    const dsn = 'https://' + SENTRY.key + '@' + SENTRY.host + '/' + SENTRY.project;
+    const parts = [JSON.stringify({ event_id: eventId, dsn }) + '\n', '{"type":"feedback"}\n', JSON.stringify(event) + '\n'];
+    shots.forEach((shot, i) => {
+      const filename = i === 0 ? 'screenshot.jpg' : 'screenshot-' + (i + 1) + '.jpg';
+      parts.push(JSON.stringify({ type: 'attachment', length: shot.blob.size, filename, content_type: 'image/jpeg' }) + '\n', shot.blob, '\n');
+    });
+    return new Blob(parts);
+  }
+
+  function explain(code) {
+    if (code === 413) return 'Die Bilder sind zu groß. Entferne eins und versuch es noch einmal.';
+    if (code === 429) return 'Gerade sind zu viele Tickets eingegangen. Versuch es in ein paar Minuten noch einmal.';
+    if (code >= 400) return 'Das Ticket wurde nicht angenommen (Code ' + code + ').';
+    return 'Keine Verbindung zum Ticket-Server. Prüf dein Internet und versuch es noch einmal.';
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (busy) return;
+
+    if (message.value.trim().length < 3) { setStatus('Bitte schreib kurz, worum es geht.', 'err'); message.focus(); return; }
+    if (emailInput.value.trim() && !emailInput.checkValidity()) { setStatus('Die E-Mail-Adresse sieht nicht richtig aus.', 'err'); emailInput.focus(); return; }
+
+    // Das unsichtbare Feld füllt nur ein Automat aus: so tun, als wäre alles gut, aber nichts senden.
+    if ($('website').value) { finish('00000000'); return; }
+
+    // Die Wartezeit merkt sich die Seite auch im Arbeitsspeicher: Ohne Browser-Speicher (z. B. privates Fenster) gilt sie trotzdem.
+    let last = lastSentAt;
+    try { last = Math.max(last, Number(localStorage.getItem(SENT_KEY)) || 0); } catch (_) {}
+    const wait = Math.ceil((last + LIMITS.cooldownMs - Date.now()) / 1000);
+    if (wait > 0) { setStatus('Bitte warte noch ' + wait + ' s, bevor du das nächste Ticket sendest.', 'err'); return; }
+
+    busy = true; $('send').disabled = true; setStatus('Wird gesendet …', 'busy');
+    const eventId = crypto.randomUUID().replace(/-/g, '');
+    const url = 'https://' + SENTRY.host + '/api/' + SENTRY.project + '/envelope/?sentry_version=7&sentry_key=' + SENTRY.key + '&sentry_client=alibi-ticket-page%2F1.0';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LIMITS.timeoutMs);
+    try {
+      // text/plain: eine "einfache" Anfrage, der Browser braucht keine Vorab-Prüfung.
+      const response = await fetch(url, { method: 'POST', body: buildEnvelope(eventId), headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        referrerPolicy: 'no-referrer', signal: controller.signal });
+      if (!response.ok) throw Object.assign(new Error('http'), { code: response.status });
+      lastSentAt = Date.now();
+      try { localStorage.setItem(SENT_KEY, String(lastSentAt)); } catch (_) {}
+      finish(eventId.slice(0, 8));
+    } catch (error) {
+      setStatus(explain(error.code || 0), 'err');
+    } finally {
+      clearTimeout(timer); busy = false; $('send').disabled = false;
+    }
+  }
+
+  function finish(number) {
+    clearDraft();
+    $('ticketNo').textContent = number;
+    $('formCard').style.display = 'none';
+    $('done').style.display = 'block';
+  }
+
+  function reset() {
+    shots.forEach(s => URL.revokeObjectURL(s.url)); shots = []; renderShots();
+    message.value = ''; updateCount();
+    setStatus('', '');
+    $('done').style.display = 'none';
+    $('formCard').style.display = '';
+    message.focus();
+  }
+
+  $('form').addEventListener('submit', submit);
+  $('again').addEventListener('click', reset);
+  loadDraft(); updateCount(); message.focus();
+})();
+</script>
+</body>
+</html>
